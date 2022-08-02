@@ -101,7 +101,7 @@ def load_config():
 def generate_http_response(req, conf):
 	""" Generate HTTP response """
 
-	args = ["{}={}".format(key, value) for key, value in request.args.items()]
+	args = [f"{key}={value}" for key, value in request.args.items()]
 	path = req.path
 	con_type = None
 	body_path = None
@@ -137,8 +137,8 @@ def alert_msg(req, conf):
 	browser_version = req.user_agent.version
 	browser_lang = req.user_agent.language
 	platform = req.user_agent.platform
-	headers = "{}".format(req.headers)
-	args = ["{}={}".format(key, value) for key, value in request.args.items()]
+	headers = f"{req.headers}"
+	args = [f"{key}={value}" for key, value in request.args.items()]
 	# X-Forwarded-For: the originating IP address of the client connecting to the Heroku router
 	if req.headers.getlist("X-Forwarded-For"):
 		source_ip = req.headers.getlist("X-Forwarded-For")[0]
@@ -156,27 +156,21 @@ def alert_msg(req, conf):
 		if ("trap-note" in conf['traps'][path]) and note is None:
 			note = conf['traps'][path]['trap-note']
 
-	#TODO: Threat Intel Lookup (Cymon v2)
-
-	# Message dictionary
-	msg = {
-		"token-note": note if note else "None",
+	return {
+		"token-note": note or "None",
 		"host": url_root,
-		"path": full_path if full_path else "None",
+		"path": full_path or "None",
 		"http-method": http_method,
-		"token": args[0] if args else "None", #Only the first arg
-		"body": data if data else "None",
+		"token": args[0] if args else "None",
+		"body": data or "None",
 		"source-ip": source_ip,
 		"user-agent": useragent_str,
-		"browser": browser if browser else "None",
-		"browser_version": browser_version if browser_version else "None",
-		"browser_lang": browser_lang if browser_lang else "None",
-		"platform": platform if platform else "None",
-		"http-headers": headers
-		#"threat-intel": threat_intel
+		"browser": browser or "None",
+		"browser_version": browser_version or "None",
+		"browser_lang": browser_lang or "None",
+		"platform": platform or "None",
+		"http-headers": headers,
 	}
-
-	return msg
 
 
 def email_alerter(msg, conf):
@@ -189,28 +183,10 @@ def email_alerter(msg, conf):
 	to_email = conf['alert']['email']['to_email']
 	subject = 'Honeyku Alert'
 	now = time.strftime('%a, %d %b %Y %H:%M:%S %Z', time.localtime())
-	body = ("Honeytoken triggered!\n\n"
-			"Time: {}\n"
-			"Source IP: {}\n"
-			#"Threat Intel Report: {}\n"
-			"User-Agent: {}\n"
-			"Token Note: {}\n"
-			"Token: {}\n"
-			"Path: {}\n"
-			"Host: {}").format(
-		now,
-		msg['source-ip'],
-		#msg['threat-intel'] if msg['threat-intel'] else "None",
-		msg['user-agent'],
-		msg['token-note'],
-		msg['token'],
-		msg['path'],
-		msg['host'])
-	email_text = "From: {}\nTo: {}\nSubject: {}\n\n{}".format(
-		smtp_user,
-		", ".join(to_email),
-		subject,
-		body)
+	body = f"Honeytoken triggered!\n\nTime: {now}\nSource IP: {msg['source-ip']}\nUser-Agent: {msg['user-agent']}\nToken Note: {msg['token-note']}\nToken: {msg['token']}\nPath: {msg['path']}\nHost: {msg['host']}"
+
+	email_text = f'From: {smtp_user}\nTo: {", ".join(to_email)}\nSubject: {subject}\n\n{body}'
+
 
 	try:
 		server = smtplib.SMTP(smtp_server, smtp_port)
@@ -221,7 +197,7 @@ def email_alerter(msg, conf):
 		server.close()
 		logger.info("Email alert is sent")
 	except smtplib.SMTPException as err:
-		logger.error("Error sending email: {}".format(err))
+		logger.error(f"Error sending email: {err}")
 
 
 def sms_alerter(msg, conf):
@@ -235,7 +211,7 @@ def slack_alerter(msg, webhook_url):
 	now = time.strftime('%a, %d %b %Y %H:%M:%S %Z', time.localtime())
 	# Preparing Slack message
 	slack_message = {
-		"text": "*Honeytoken triggered!*\nA honeytoken has been triggered by {}".format(msg['source-ip']),
+		"text": f"*Honeytoken triggered!*\nA honeytoken has been triggered by {msg['source-ip']}",
 		"username": "honeyku",
 		"icon_emoji": ":ghost:",
 		"attachments": [
@@ -246,72 +222,54 @@ def slack_alerter(msg, webhook_url):
 				"footer": "honeyku",
 				"footer_icon": "https://raw.githubusercontent.com/0x4D31/honeyLambda/master/docs/slack-footer.png",
 				"fields": [
-					{
-						"title": "Time",
-						"value": now,
-						"short": "true"
-					},
+					{"title": "Time", "value": now, "short": "true"},
 					{
 						"title": "Source IP Address",
 						"value": msg['source-ip'],
-						"short": "true"
+						"short": "true",
 					},
-					#{
-					#	"title": "Threat Intel Report",
-					#	"value": msg['threat-intel'] if msg['threat-intel'] else "None",
-					#},
-					{
-						"title": "Token",
-						"value": msg['token'],
-						"short": "true"
-					},
+					# {
+					# 	"title": "Threat Intel Report",
+					# 	"value": msg['threat-intel'] if msg['threat-intel'] else "None",
+					# },
+					{"title": "Token", "value": msg['token'], "short": "true"},
 					{
 						"title": "Token Note",
 						"value": msg['token-note'],
-						"short": "true"
+						"short": "true",
 					},
-					{
-						"title": "Host",
-						"value": msg['host'],
-						"short": "true"
-					},
-					{
-						"title": "Path",
-						"value": msg['path'],
-						"short": "true"
-					},
+					{"title": "Host", "value": msg['host'], "short": "true"},
+					{"title": "Path", "value": msg['path'], "short": "true"},
 					{
 						"title": "Browser",
 						"value": msg['browser'],
-						"short": "true"
+						"short": "true",
 					},
 					{
 						"title": "Browser Version",
 						"value": msg['browser_version'],
-						"short": "true"
+						"short": "true",
 					},
 					{
 						"title": "Platform",
 						"value": msg['platform'],
-						"short": "true"
+						"short": "true",
 					},
 					{
 						"title": "HTTP Method",
 						"value": msg['http-method'],
-						"short": "true"
+						"short": "true",
 					},
-					{
-						"title": "User-Agent",
-						"value": msg['user-agent']
-					}
-					#{
-					#	"title": "HTTP Headers",
-					#	"value": msg['http-headers']
-					#}
-				]
+					{"title": "User-Agent", "value": msg['user-agent']}
+					# {
+					# 	"title": "HTTP Headers",
+					# 	"value": msg['http-headers']
+					# }
+				],
 			}
-		]
+		],
 	}
+
 
 	# Sending Slack message
 	req = urllib.request.Request(webhook_url, data=json.dumps(slack_message).encode('utf8'))
@@ -320,9 +278,9 @@ def slack_alerter(msg, webhook_url):
 		resp = urllib.request.urlopen(req)
 		logger.info("Slack alert is sent")
 	except urllib.error.HTTPError as err:
-		logger.error("Request failed: {} {}".format(err.code, err.reason))
+		logger.error(f"Request failed: {err.code} {err.reason}")
 	except urllib.error.URLError as err:
-		logger.error("Connection failed: {}".format(err.reason))
+		logger.error(f"Connection failed: {err.reason}")
 
 	return
 
